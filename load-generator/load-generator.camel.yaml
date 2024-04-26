@@ -6,7 +6,7 @@
       description: tick
       uri: timer:template
       parameters:
-        period: "10000"
+        period: "5000"
       steps:
         - setBody:
             id: setBody-2930
