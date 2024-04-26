@@ -3,10 +3,10 @@
     description: Data ingestion
     from:
       id: from-2954
-      description: Consume transactions
+      description: Transactions
       uri: kafka:transactions
       parameters:
-        brokers: kafka.rm066rh-dev.svc.cluster.local:9092
+        brokers: "{{secret:kafka-broker/uri}}"
         clientId: data-ingestion-client
         saslJaasConfig: org.apache.kafka.common.security.scram.ScramLoginModule required
           username="user1"
@@ -16,55 +16,35 @@
       steps:
         - unmarshal:
             id: unmarshal-1178
-            description: Parse CSV format
-            csv:
-              allowMissingColumnNames: true
-              trim: true
-        - split:
-            id: split-6116
-            description: Split CSV records
-            steps: []
-            expression:
-              simple:
-                expression: ${body}
+            description: Parse JSON format
+            json:
+              prettyPrint: true
         - to:
-            id: to-2761
-            description: Send the record to storage
+            id: to-8199
+            description: Send to DB
             uri: direct:store-record-endpoint
             parameters: {}
 - route:
     id: record-storage
-    description: Record storage into DB
+    description: Save into DB
     from:
       id: from-3238
+      description: DB entrypoint
       uri: direct:store-record-endpoint
       parameters: {}
       steps:
-        - setHeaders:
-            id: setHeaders-3758
-            headers:
-              - expression:
-                  simple:
-                    expression: ${body[0]}
-                    resultType: java.lang.String
-                name: timestamp
-              - expression:
-                  simple:
-                    expression: ${body[1]}
-                    resultType: java.lang.String
-                name: account
-              - expression:
-                  simple:
-                    expression: ${body[2]}
-                    resultType: java.lang.Float
-                name: amount
         - to:
             id: to-1127
+            description: Save to postgres
             uri: sql:INSERT INTO transactions (timestamp, account, amount) VALUES
-              (:#${headers.timestamp}, :#${headers.account},
-              :#${headers.amount});
+              (:#${body[timestamp]}, :#${body[account]}, :#${body[amount]});
             parameters:
               dataSource: "#PostgresqlDataSource"
+            disabled: true
+        - to:
+            id: to-3238
+            uri: direct:log-record
+            parameters: {}
             disabled: false
 - beans:
     - name: PostgresqlDataSource
@@ -72,6 +52,27 @@
         databaseName: "{{secret:postgres/database-name}}"
         password: "{{secret:postgres/database-password}}"
         portNumber: "5432"
-        serverName: postgres.rm066rh-dev.svc.cluster.local
+        serverName: postgres.rh-ee-ricmarti-dev.svc.cluster.local
         user: "{{secret:postgres/database-user}}"
       type: org.postgresql.ds.PGSimpleDataSource
+- route:
+    id: route-1363
+    from:
+      id: from-3200
+      description: Log entrypoint
+      uri: direct:log-record
+      parameters: {}
+      steps:
+        - marshal:
+            id: marshal-2486
+            jacksonXml:
+              prettyPrint: true
+        - log:
+            id: log-3893
+            message: ${body}
+        - to:
+            id: to-6502
+            description: Save file
+            uri: file:./out/
+            parameters:
+              fileName: ${exchangeId}
