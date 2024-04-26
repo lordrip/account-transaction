@@ -18,7 +18,7 @@
       uri: direct:get-transactions
       steps:
         - to:
-            id: to-1127
+            id: to-1198
             description: Retrieve the last n records
             uri: sql:SELECT * FROM transactions ORDER BY timestamp DESC LIMIT
               :#${headerAs(limit, int)};
